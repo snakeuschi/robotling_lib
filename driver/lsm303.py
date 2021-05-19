@@ -255,7 +255,7 @@ class LSM303(object):
     return self._isReady
 
   @property
-  def channel_Count(self):
+  def channel_count(self):
     return CHAN_COUNT
 
   @property

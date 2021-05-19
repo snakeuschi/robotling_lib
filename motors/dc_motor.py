@@ -30,6 +30,6 @@ class DCMotor(object):
   def speed(self, value):
     self._speed  = min(max(value, -100), 100)
     self._spArr[self._chan] = self._speed
-    self._driver.set_motor_speed(self._spArr)
+    self._driver.setMotorSpeed(self._spArr)
 
 # ----------------------------------------------------------------------------

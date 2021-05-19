@@ -44,7 +44,9 @@ class Compass(SensorBase):
       # Initialize
       self._acc     = array.array('i', [0,0,0])
       self._mag     = array.array('i', [0,0,0])
+      self._acc_off = array.array('f', [0,0,0])
       self._mag_off = array.array('f', [0,0,0])
+      self._acc_mm  = array.array('f', [1,0,0, 0,1,0, 0,0,1])
       self._mag_mm  = array.array('f', [1,0,0, 0,1,0, 0,0,1])
       self._mag_fst = 50.0
       self._heading = 0.0
@@ -56,7 +58,7 @@ class Compass(SensorBase):
       # Retrieve calibration data, if available
       if self._driver.name is "lsm303":
         try:
-          import sensors.calib_data_lsm303 as calib
+          import robotling_lib.sensors.calib_data_lsm303 as calib
           self._mag_off[0] = calib.XM_OFF
           self._mag_off[1] = calib.YM_OFF
           self._mag_off[2] = calib.ZM_OFF
@@ -70,6 +72,20 @@ class Compass(SensorBase):
           self._mag_mm[7]  = calib.MM_21
           self._mag_mm[8]  = calib.MM_22
           self._mag_fst    = calib.MFSTR
+
+          self._acc_off[0] = calib.XA_OFF
+          self._acc_off[1] = calib.YA_OFF
+          self._acc_off[2] = calib.ZA_OFF
+          self._acc_mm[0]  = calib.AC_00
+          self._acc_mm[1]  = calib.AC_01
+          self._acc_mm[2]  = calib.AC_02
+          self._acc_mm[3]  = calib.AC_10
+          self._acc_mm[4]  = calib.AC_11
+          self._acc_mm[5]  = calib.AC_12
+          self._acc_mm[6]  = calib.AC_20
+          self._acc_mm[7]  = calib.AC_21
+          self._acc_mm[8]  = calib.AC_22
+
           self._isCalib    = True
         except ImportError:
           pass
@@ -108,15 +124,37 @@ class Compass(SensorBase):
     xmn = xmc /norm
     ymn = ymc /norm
     zmn = zmc /norm
-    ymn = -ymc
-    zmn = -zmc
+    ymn = -ymn
+    zmn = -zmn
 
     if tilt:
       # Tilt compensate magnetic sensor measurements
       # NOTE: Not yet working correctly
-      _, _, pit, rol = self.get_pitch_roll(radians=True)
-      xmc = xmn *cos(pit) +ymn *sin(pit) *sin(rol) +zmn *sin(pit) *cos(rol)
-      ymc = zmn *sin(rol) -ymn* cos(rol)
+      Acc  = self._driver.accelerometer
+
+      anorm = sqrt(Acc[0]**2 +Acc[1]**2 +Acc[2]**2)
+      xan =  Acc[0] /anorm
+      yan = -Acc[1] /anorm
+      zan = -Acc[2] /anorm
+
+      xe = ymn*zan - zmn*yan
+      ye = zmn*xan - xmn*zan
+      ze = xmn*yan - ymn*xan
+
+      enorm = sqrt(xe**2 +ye**2 +ze**2)
+      xen = xe /enorm
+      yen = ye /enorm
+      zen = ze /enorm
+
+      #Nordvektor parallel zum Boden berechnen
+      xmc = yan*zen - zan*yen
+      ymc = zan*xen - xan*zen
+      zmc = xan*yen - yan*xen
+
+      nnorm = sqrt(xmc**2 +ymc**2 +zmc**2)
+      xmc = xmc /nnorm
+      ymc = ymc /nnorm
+      zmc = zmc /nnorm
 
     else:
       xmc = xmn
@@ -152,6 +190,16 @@ class Compass(SensorBase):
       return (rb.RBL_ERR_DEVICE_NOT_READY, 0, 0)
     Acc  = self._acc
     Acc  = self._driver.accelerometer
+    AOf  = self._acc_off
+    Amm  = self._acc_mm
+
+    # Calibrate raw accelerometer data
+    xmo = Acc[0] -AOf[0]
+    ymo = Acc[1] -AOf[1]
+    zmo = Acc[2] -AOf[2]
+    xmc = Amm[0]*xmo +Amm[1]*ymo +Amm[2]*zmo
+    ymc = Amm[3]*xmo +Amm[4]*ymo +Amm[5]*zmo
+    zmc = Amm[6]*ymo +Amm[7]*ymo +Amm[8]*zmo
 
     # Normalize accelerometer readings
     norm = sqrt(Acc[0]**2 +Acc[1]**2 +Acc[2]**2)
